@@ -1,10 +1,5 @@
-## Writeup Template
-
-### You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
-
----
-
-**Advanced Lane Finding Project**
+# **Advanced Lane Finding Project**
+#### **Simon Mijares**
 
 The goals / steps of this project are the following:
 
@@ -19,13 +14,14 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./examples/undistort_output.png "Undistorted"
-[image2]: ./test_images/test1.jpg "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[image1]: ./md_files/camcal.png "Undistorted"
+[image2]: ./md_files/singlepipecorr.png "Road Transformed"
+[image3]: ./md_files/binary.png "Binary Example"
+[image4]: ./md_files/warping.png "Warp Example"
+[image5]: ./md_files/curve.png "Fit Visual"
+[image6]: ./md_files/pipeline.png "Output"
+[image7]: ./md_files/alltest.png "All image test"
+[video1]: ./project_simon.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 
@@ -43,85 +39,127 @@ You're reading it!
 
 #### 1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
 
-The code for this step is contained in the first code cell of the IPython notebook located in "./examples/example.ipynb" (or in lines # through # of the file called `some_file.py`).  
+The code for this step is contained in the sixth to the eleventh code block cell of the IPython notebook located in "./P4.ipynb".  
 
-I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
+I start by testing the image visualization, then loading the first image calibration, since this image crop the last row of points so it needs different (9,5) parameters to call the calibration functions. Then all the set of calibration images with the corrects parameters (9,6). On each case preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
 
-I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result: 
+I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result:
 
 ![alt text][image1]
 
-### Pipeline (single images)
-
 #### 1. Provide an example of a distortion-corrected image.
+After the camera parameters were calculated with cv2.calibrateCamera and saved in a pickle file for future restore, these parameters are loaded and used to correct the distortion of a test image and then contrast equalized by the CLAHE algorithm as showed bellow (Code block cell 14):
 
-To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
 ![alt text][image2]
 
-#### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
+#### 2. Describe how (and identify where in your code) you used color transforms, gradients or others
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at code block cells 16 through 18 in `P4.ipynb`).
+To begin, a combination of red and green channel were obtained based on the Rec. 709 in order to obtain an artificial yellow channel, then the sobel operator was used on this channel.
+On the other hand, the original image is transformed to HLS color space to extract the Saturation channel.
+After obtaining the Sat channel and the sobel yellow channel, both images are thresholded:
+```
+# For Yellow Sobel
+thresh_min = 20
+thresh_max = 255
+
+# For Saturation channel
+s_thresh_min = 155
+s_thresh_max = 255
+```
+Then the sobel is processed with a close operation "cv2.MORPH_DILATE" to enhance its features and contribution to the final result.
+
+This images are combined in an 'or' operation and then processed with an "cv2.MORPH_CLOSE" to fill the posible spaces within the lane lines.
+
+Here's an example of my output for this step:
 
 ![alt text][image3]
+The thresholds had to be soften to be able to work at conditions with shadows, allowing some noise in the binary image.
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
-
+The code for my perspective transform includes a function called `warp()`, which appears in the 19th code cell of the IPython notebook.  The `warp()` function takes as inputs an image (`img`), as well as source (`src`) points. I chose the hardcode the destination points in the following manner:
 ```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
 dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
+        [[350,0],
+         [853,0],
+         [853,720],
+         [350,720]])
 ```
-
+On the other hand, the source points were obtaining by trial and error using the `straight_lines1.jpg` file and the following code:
+```python
+tdrift = -18                  # Drift in the top of the trapezoid
+bdrift = 28                   # Drift in the body of the trapezoid
+ydrif = 20                    # Drift in y direction of the top of the trapezoid
+xctr = -12                    # Center of the trapezoid
+top = 654.442 - 622.491+67-2  # Start point of the trapezoid
+base = 1040.87 - 265.789 - 20 # Start point of the trapezoid
+src = np.float32([[622.491+xctr+tdrift, 431.432+ydrif],
+         [622.491+top+xctr+tdrift, 431.432+ydrif],
+         [265.789+base+xctr+bdrift, 676.387],
+         [265.789+xctr+bdrift, 676.387]])
+```
 This resulted in the following source and destination points:
 
-| Source        | Destination   | 
-|:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+| Source           | Destination   |
+|:-------------:   |:-------------:|
+| 592.49  , 451.49 | 350, 0        |
+| 689.44  , 451.43 | 853, 0        |
+| 1036.86 , 676.38 | 853, 720      |
+| 281.789 , 676.38 | 350, 720      |
 
-I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+I test my perspective transform and corrected by moving the parameters until it was working as expected drawing the `src` and `dst` points onto a test image and its warped counterpart verifying that the lines appear parallel in the warped image.
 
 ![alt text][image4]
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+After warp the perspective, the histogram of the lower half is obtained in order to acquire the peaks and start searching the dots that belongs to the lane line. As can be seen on the cell code block 20.
+
+Then the images is divider in nwindows and start the search on windows of 2xmargin width and height.
+
+Finally the np.polyfit function obtains the second order approximation of the selectect points.
 
 ![alt text][image5]
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+In the same cell block 20 the points are scaled based on the approximation values to transform from pixels to meters based on the lane lines separation.
+```python
+# Define conversions in x and y from pixels space to meters
+ym_per_pix = 28/720 # meters per pixel in y dimension
+xm_per_pix = 3.7/503 # meters per pixel in x dimension
+```
+Then the np.polyfit is used again but now on meters.
 
+After obtaining the curve coefficients in meters is obtained based on the following equation:
+
+```math
+Rcurve =[1+(dydx)2](3/2) / |d2x/dy2∣
+```
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+I implemented this step in the cell block 23. Then organized in separates functions in blocks 24 to 29. And finally mixed in a single function detect_lane(image) in the block 30.  Here is an example of my result on a test image:
 
 ![alt text][image6]
 
+And this is the result in all the test images:
+
+![alt text][image7]
 ---
 
 ### Pipeline (video)
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
-
+Here's a [link to my video result](./project_simon.mp4)
+[![Training Data](https://img.youtube.com/vi/oLjYe-kLWKc/1.jpg)](https://youtu.be/oLjYe-kLWKc)
 ---
 
 ### Discussion
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+One sensible features are the thresholds, since there is no indication of how to set them, and just by trial and error is difficult to have a value for every situation.
+The implemented pipelane, might fail if a line pass around the lane lines.
+To make it more robust, a more strict binarization function should be implemented.
